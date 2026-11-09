@@ -4,6 +4,8 @@ import json
 
 import cv2
 
+from handwrite import security
+
 # Seq: A-Z, a-z, 0-9, SPECIAL_CHARS
 ALL_CHARS = list(
     itertools.chain(
@@ -139,6 +141,10 @@ class SHEETtoPNG:
             characters_dir/ord(character)/ord(character).png  (SINGLE SHEET INPUT)
             characters_dir/sheet_filename/ord(character)/ord(character).png  (MULTIPLE SHEETS INPUT)
 
+        Every ``<codepoint>`` directory and PNG is created without
+        following symbolic links, so a pre-planted link cannot redirect
+        the writes outside ``characters_dir``.
+
         Parameters
         ----------
         characters : list of list
@@ -151,11 +157,13 @@ class SHEETtoPNG:
         # Create directory for each character and save the png for the characters
         # Structure (single sheet): UserProvidedDir/ord(character)/ord(character).png
         # Structure (multiple sheets): UserProvidedDir/sheet_filename/ord(character)/ord(character).png
-        for k, images in enumerate(characters):
-            character = os.path.join(characters_dir, str(ALL_CHARS[k]))
-            if not os.path.exists(character):
-                os.mkdir(character)
-            cv2.imwrite(
-                os.path.join(character, str(ALL_CHARS[k]) + ".png"),
-                images[0],
-            )
+        with security.root_directory(characters_dir) as root:
+            for k, images in enumerate(characters):
+                name = str(ALL_CHARS[k])
+                with security.child_directory(root, name, create=True) as character_dir:
+                    encoded, buffer = cv2.imencode(".png", images[0])
+                    if not encoded:
+                        raise ValueError("Could not encode character %s as PNG." % name)
+                    security.publish_bytes(
+                        character_dir, name + ".png", buffer.tobytes()
+                    )

@@ -77,3 +77,63 @@ class TestCLI(unittest.TestCase):
             )
         except subprocess.CalledProcessError as e:
             self.assertNotEqual(e.returncode, 0)
+
+    def test_font_filename_traversal(self):
+        # POSIX and Windows style traversal must be neutralised to a basename
+        marker = "pwn-%s" % os.path.basename(self.temp_dir)
+        subprocess.call(
+            [
+                "handwrite",
+                os.path.join(self.file_dir, "test_data", "sheettopng", "excellent.jpg"),
+                self.temp_dir,
+                "--filename",
+                "../../../../tmp/" + marker,
+            ]
+        )
+        escaped = os.path.abspath(
+            os.path.join(self.temp_dir, "../../../../tmp", marker + ".ttf")
+        )
+        self.assertFalse(os.path.exists(escaped))
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, marker + ".ttf")))
+
+        # Windows path form even on a POSIX host.
+        win_marker = "winpwn-%s" % os.path.basename(self.temp_dir)
+        subprocess.call(
+            [
+                "handwrite",
+                os.path.join(self.file_dir, "test_data", "sheettopng", "excellent.jpg"),
+                self.temp_dir,
+                "--filename",
+                "..\\..\\" + win_marker,
+            ]
+        )
+        self.assertTrue(
+            os.path.exists(os.path.join(self.temp_dir, win_marker + ".ttf"))
+        )
+        for name in os.listdir(self.temp_dir):
+            self.assertNotIn("\\", name)
+
+    def test_chinese_paths_and_filename(self):
+        base = os.path.join(self.temp_dir, "测试目录")
+        out_dir = os.path.join(base, "字体输出")
+        keep_dir = os.path.join(base, "保留目录")
+        subprocess.call(
+            [
+                "handwrite",
+                os.path.join(self.file_dir, "test_data", "sheettopng", "excellent.jpg"),
+                out_dir,
+                "--directory",
+                keep_dir,
+                "--filename",
+                "手写体",
+            ]
+        )
+        self.assertTrue(os.path.exists(os.path.join(out_dir, "手写体.ttf")))
+        # The retained directory keeps the normal intermediates.
+        for codepoint in ("65", "90", "48"):
+            for suffix in (".png", ".bmp", ".svg"):
+                self.assertTrue(
+                    os.path.exists(
+                        os.path.join(keep_dir, codepoint, codepoint + suffix)
+                    )
+                )

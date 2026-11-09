@@ -3,6 +3,22 @@ import os
 import json
 import uuid
 
+try:
+    # Normal usage (package installed / run from the project).
+    from handwrite import security
+except ImportError:
+    # FontForge runs this file as a standalone script with its own Python,
+    # where the package (and its cv2/Pillow dependent __init__) is not
+    # importable. security.py is stdlib-only, load it by path instead.
+    import importlib.util
+
+    _spec = importlib.util.spec_from_file_location(
+        "_handwrite_security",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "security.py"),
+    )
+    security = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(security)
+
 
 class SVGtoTTF:
     def convert(self, directory, outdir, config, metadata=None):
@@ -25,6 +41,8 @@ class SVGtoTTF:
         import subprocess
         import platform
 
+        metadata = security.validate_metadata(metadata)
+
         subprocess.run(
             (
                 ["ffpython"]
@@ -33,9 +51,9 @@ class SVGtoTTF:
             )
             + [
                 os.path.abspath(__file__),
-                config,
-                directory,
-                outdir,
+                os.path.abspath(config),
+                os.path.abspath(directory),
+                os.path.abspath(outdir),
                 json.dumps(metadata),
             ]
         )
@@ -91,9 +109,10 @@ class SVGtoTTF:
             # Create character glyph
             g = self.font.createMappedChar(k)
             self.unicode_mapping.setdefault(k, g.glyphname)
-            # Get outlines
-            src = "{}/{}.svg".format(k, k)
-            src = directory + os.sep + src
+            # Get outlines. The SVG must be the regular file planned for
+            # this codepoint: links and paths escaping the directory are
+            # rejected before FontForge opens anything.
+            src = security.verify_planned_file(directory, str(k), "%s.svg" % k)
             g.importOutlines(src, ("removeoverlap", "correctdir"))
             g.removeOverlap()
 
@@ -150,7 +169,13 @@ class SVGtoTTF:
     def generate_font_file(self, filename, outdir, config_file):
         """Output TTF file.
 
-        Additionally checks for multiple outputs and duplicates.
+        The font is generated into a private staging path inside the
+        output directory and only then atomically published under a
+        sanitized name. Path traversal (POSIX or Windows style) in the
+        requested name cannot escape ``outdir``, and a pre-planted
+        symbolic link at the destination is replaced, never written
+        through. Multiple outputs keep the historical numbering
+        (``MyFont (1).ttf``).
 
         Parameters
         ----------
@@ -164,17 +189,23 @@ class SVGtoTTF:
         if filename is None:
             raise NameError("filename not found in config file.")
 
-        outfile = str(
-            outdir
-            + os.sep
-            + (filename + ".ttf" if not filename.endswith(".ttf") else filename)
-        )
+        # Resolve the name (and collision numbering) before generating.
+        outfile = security.resolve_font_path(outdir, str(filename))
 
-        while os.path.exists(outfile):
-            outfile = os.path.splitext(outfile)[0] + " (1).ttf"
-
-        sys.stderr.write("\nGenerating %s...\n" % outfile)
-        self.font.generate(outfile)
+        os.makedirs(outdir, exist_ok=True)
+        staged = security.stage_font_path(outdir)
+        try:
+            sys.stderr.write("\nGenerating %s...\n" % outfile)
+            self.font.generate(staged)
+            os.chmod(staged, 0o644)
+            security.publish_font(staged, outdir, str(filename))
+        except BaseException:
+            if os.path.exists(staged):
+                try:
+                    os.unlink(staged)
+                except OSError:
+                    pass
+            raise
 
     def convert_main(self, config_file, directory, outdir, metadata):
         try:
@@ -182,9 +213,9 @@ class SVGtoTTF:
         except:
             import fontforge
 
-        with open(config_file) as f:
-            self.config = json.load(f)
-        self.metadata = json.loads(metadata) or {}
+        with open(config_file, "rb") as f:
+            self.config = security.load_config(f.read())
+        self.metadata = security.validate_metadata(json.loads(metadata))
 
         self.font = fontforge.font()
         self.unicode_mapping = {}
