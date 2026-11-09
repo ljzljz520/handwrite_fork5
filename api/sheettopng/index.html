@@ -876,9 +876,7 @@
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>handwrite/sheettopng.py</code></summary>
-                <div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 18</span>
-<span class="normal"> 19</span>
-<span class="normal"> 20</span>
+                <div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 20</span>
 <span class="normal"> 21</span>
 <span class="normal"> 22</span>
 <span class="normal"> 23</span>
@@ -1019,7 +1017,15 @@
 <span class="normal">158</span>
 <span class="normal">159</span>
 <span class="normal">160</span>
-<span class="normal">161</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">SHEETtoPNG</span><span class="p">:</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">SHEETtoPNG</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Converter class to convert input sample sheet to character PNGs."""</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">convert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sheet</span><span class="p">,</span> <span class="n">characters_dir</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">cols</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">rows</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
@@ -1143,6 +1149,10 @@
 <span class="sd">            characters_dir/ord(character)/ord(character).png  (SINGLE SHEET INPUT)</span>
 <span class="sd">            characters_dir/sheet_filename/ord(character)/ord(character).png  (MULTIPLE SHEETS INPUT)</span>
 
+<span class="sd">        Every ``&lt;codepoint&gt;`` directory and PNG is created without</span>
+<span class="sd">        following symbolic links, so a pre-planted link cannot redirect</span>
+<span class="sd">        the writes outside ``characters_dir``.</span>
+
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        characters : list of list</span>
@@ -1155,14 +1165,16 @@
         <span class="c1"># Create directory for each character and save the png for the characters</span>
         <span class="c1"># Structure (single sheet): UserProvidedDir/ord(character)/ord(character).png</span>
         <span class="c1"># Structure (multiple sheets): UserProvidedDir/sheet_filename/ord(character)/ord(character).png</span>
-        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">images</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">characters</span><span class="p">):</span>
-            <span class="n">character</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">characters_dir</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">ALL_CHARS</span><span class="p">[</span><span class="n">k</span><span class="p">]))</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">character</span><span class="p">):</span>
-                <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">character</span><span class="p">)</span>
-            <span class="n">cv2</span><span class="o">.</span><span class="n">imwrite</span><span class="p">(</span>
-                <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">character</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">ALL_CHARS</span><span class="p">[</span><span class="n">k</span><span class="p">])</span> <span class="o">+</span> <span class="s2">".png"</span><span class="p">),</span>
-                <span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
-            <span class="p">)</span>
+        <span class="k">with</span> <span class="n">security</span><span class="o">.</span><span class="n">root_directory</span><span class="p">(</span><span class="n">characters_dir</span><span class="p">)</span> <span class="k">as</span> <span class="n">root</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">images</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">characters</span><span class="p">):</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ALL_CHARS</span><span class="p">[</span><span class="n">k</span><span class="p">])</span>
+                <span class="k">with</span> <span class="n">security</span><span class="o">.</span><span class="n">child_directory</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">create</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">as</span> <span class="n">character_dir</span><span class="p">:</span>
+                    <span class="n">encoded</span><span class="p">,</span> <span class="n">buffer</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">imencode</span><span class="p">(</span><span class="s2">".png"</span><span class="p">,</span> <span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">encoded</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Could not encode character </span><span class="si">%s</span><span class="s2"> as PNG."</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+                    <span class="n">security</span><span class="o">.</span><span class="n">publish_bytes</span><span class="p">(</span>
+                        <span class="n">character_dir</span><span class="p">,</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">".png"</span><span class="p">,</span> <span class="n">buffer</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
+                    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -1208,9 +1220,7 @@ rows : int, default=10
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>handwrite/sheettopng.py</code></summary>
-              <div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">21</span>
-<span class="normal">22</span>
-<span class="normal">23</span>
+              <div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">23</span>
 <span class="normal">24</span>
 <span class="normal">25</span>
 <span class="normal">26</span>
@@ -1237,7 +1247,9 @@ rows : int, default=10
 <span class="normal">47</span>
 <span class="normal">48</span>
 <span class="normal">49</span>
-<span class="normal">50</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">convert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sheet</span><span class="p">,</span> <span class="n">characters_dir</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">cols</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">rows</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+<span class="normal">50</span>
+<span class="normal">51</span>
+<span class="normal">52</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">convert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sheet</span><span class="p">,</span> <span class="n">characters_dir</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">cols</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">rows</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Convert a sheet of sample writing input to a custom directory structure of PNGs.</span>
 
 <span class="sd">    Detect all characters in the sheet as a separate contours and convert each to</span>
@@ -1306,9 +1318,7 @@ rows : int, default=10
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>handwrite/sheettopng.py</code></summary>
-              <div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 52</span>
-<span class="normal"> 53</span>
-<span class="normal"> 54</span>
+              <div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 54</span>
 <span class="normal"> 55</span>
 <span class="normal"> 56</span>
 <span class="normal"> 57</span>
@@ -1386,7 +1396,9 @@ rows : int, default=10
 <span class="normal">129</span>
 <span class="normal">130</span>
 <span class="normal">131</span>
-<span class="normal">132</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">detect_characters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sheet_image</span><span class="p">,</span> <span class="n">threshold_value</span><span class="p">,</span> <span class="n">cols</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">rows</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">detect_characters</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sheet_image</span><span class="p">,</span> <span class="n">threshold_value</span><span class="p">,</span> <span class="n">cols</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">rows</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Detect contours on the input image and filter them to get only characters.</span>
 
 <span class="sd">    Uses opencv to threshold the image for better contour detection. After finding all</span>
@@ -1490,6 +1502,9 @@ rows : int, default=10
 characters_dir/sheet_filename/ord(character)/ord(character).png  (MULTIPLE SHEETS INPUT)
 </code></pre></div>
 
+<p>Every <code>&lt;codepoint&gt;</code> directory and PNG is created without
+following symbolic links, so a pre-planted link cannot redirect
+the writes outside <code>characters_dir</code>.</p>
 <h4 id="handwrite.sheettopng.SHEETtoPNG.save_images--parameters">Parameters<a class="headerlink" href="#handwrite.sheettopng.SHEETtoPNG.save_images--parameters" title="Permanent link">&para;</a></h4>
 <p>characters : list of list
     Sorted list of character images each inner list representing a row of images.
@@ -1499,9 +1514,7 @@ characters_dir : str
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>handwrite/sheettopng.py</code></summary>
-              <div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">134</span>
-<span class="normal">135</span>
-<span class="normal">136</span>
+              <div class="codehilite"><table class="codehilitetable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">136</span>
 <span class="normal">137</span>
 <span class="normal">138</span>
 <span class="normal">139</span>
@@ -1526,13 +1539,25 @@ characters_dir : str
 <span class="normal">158</span>
 <span class="normal">159</span>
 <span class="normal">160</span>
-<span class="normal">161</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">save_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">characters</span><span class="p">,</span> <span class="n">characters_dir</span><span class="p">):</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">save_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">characters</span><span class="p">,</span> <span class="n">characters_dir</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Create directory for each character and save as PNG.</span>
 
 <span class="sd">    Creates directory and PNG file for each image as following:</span>
 
 <span class="sd">        characters_dir/ord(character)/ord(character).png  (SINGLE SHEET INPUT)</span>
 <span class="sd">        characters_dir/sheet_filename/ord(character)/ord(character).png  (MULTIPLE SHEETS INPUT)</span>
+
+<span class="sd">    Every ``&lt;codepoint&gt;`` directory and PNG is created without</span>
+<span class="sd">    following symbolic links, so a pre-planted link cannot redirect</span>
+<span class="sd">    the writes outside ``characters_dir``.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -1546,14 +1571,16 @@ characters_dir : str
     <span class="c1"># Create directory for each character and save the png for the characters</span>
     <span class="c1"># Structure (single sheet): UserProvidedDir/ord(character)/ord(character).png</span>
     <span class="c1"># Structure (multiple sheets): UserProvidedDir/sheet_filename/ord(character)/ord(character).png</span>
-    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">images</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">characters</span><span class="p">):</span>
-        <span class="n">character</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">characters_dir</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">ALL_CHARS</span><span class="p">[</span><span class="n">k</span><span class="p">]))</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">character</span><span class="p">):</span>
-            <span class="n">os</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">character</span><span class="p">)</span>
-        <span class="n">cv2</span><span class="o">.</span><span class="n">imwrite</span><span class="p">(</span>
-            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">character</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">ALL_CHARS</span><span class="p">[</span><span class="n">k</span><span class="p">])</span> <span class="o">+</span> <span class="s2">".png"</span><span class="p">),</span>
-            <span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
-        <span class="p">)</span>
+    <span class="k">with</span> <span class="n">security</span><span class="o">.</span><span class="n">root_directory</span><span class="p">(</span><span class="n">characters_dir</span><span class="p">)</span> <span class="k">as</span> <span class="n">root</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">images</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">characters</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ALL_CHARS</span><span class="p">[</span><span class="n">k</span><span class="p">])</span>
+            <span class="k">with</span> <span class="n">security</span><span class="o">.</span><span class="n">child_directory</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">create</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">as</span> <span class="n">character_dir</span><span class="p">:</span>
+                <span class="n">encoded</span><span class="p">,</span> <span class="n">buffer</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">imencode</span><span class="p">(</span><span class="s2">".png"</span><span class="p">,</span> <span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">encoded</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Could not encode character </span><span class="si">%s</span><span class="s2"> as PNG."</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+                <span class="n">security</span><span class="o">.</span><span class="n">publish_bytes</span><span class="p">(</span>
+                    <span class="n">character_dir</span><span class="p">,</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">".png"</span><span class="p">,</span> <span class="n">buffer</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
+                <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
